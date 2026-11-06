@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <title>TermBee</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2112"/>
+      <stop offset="1" stop-color="#140F08"/>
+    </linearGradient>
+    <linearGradient id="honey" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFD866"/>
+      <stop offset="0.55" stop-color="#F9B21A"/>
+      <stop offset="1" stop-color="#E58A00"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFBEF"/>
+      <stop offset="1" stop-color="#F3E3B8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <!-- wings -->
+  <ellipse cx="164" cy="206" rx="74" ry="44" transform="rotate(-28 164 206)" fill="url(#wing)" opacity="0.92"/>
+  <ellipse cx="348" cy="206" rx="74" ry="44" transform="rotate(28 348 206)" fill="url(#wing)" opacity="0.92"/>
+  <!-- antennae -->
+  <path d="M238 156 C 232 124, 218 106, 202 96" fill="none" stroke="#FFC93C" stroke-width="13" stroke-linecap="round"/>
+  <path d="M274 156 C 280 124, 294 106, 310 96" fill="none" stroke="#FFC93C" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="200" cy="94" r="13" fill="#FFC93C"/>
+  <circle cx="312" cy="94" r="13" fill="#FFC93C"/>
+  <!-- honeycomb body -->
+  <polygon points="256,150 386,225 386,375 256,450 126,375 126,225" fill="url(#honey)" stroke="url(#honey)" stroke-width="26" stroke-linejoin="round"/>
+  <!-- the prompt doubles as the bee's stripes -->
+  <polyline points="188,262 246,300 188,338" fill="none" stroke="#1C1408" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="268" y1="346" x2="330" y2="346" stroke="#1C1408" stroke-width="30" stroke-linecap="round"/>
+</svg>
