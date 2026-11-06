@@ -3,7 +3,7 @@
 //
 //   npm run release              checks, build, upload to release v<version>
 //   npm run release -- --dry-run checks + build only, nothing is uploaded
-//   npm run release -- --draft   create the release as a draft (publish it on GitHub later)
+//   npm run release -- --draft   leave the release as a draft (publish it on GitHub later)
 //   npm run release -- --skip-checks
 //
 // Run it once on Windows (→ .exe) and once on a Mac (→ universal .dmg). Both runs upload to
@@ -39,6 +39,49 @@ function run(cmd, cmdArgs) {
   const res = spawnSync(cmd, cmdArgs, { cwd: root, stdio: 'inherit', shell })
   if (res.error) fail(`Couldn't run ${cmd}: ${res.error.message}`)
   if (res.status !== 0) fail(`${cmd} ${cmdArgs.join(' ')} failed (exit ${res.status}).`)
+}
+
+/** Runs a gh command and explains the usual token problem if GitHub refuses it. */
+function gh(ghArgs) {
+  const res = spawnSync('gh', ghArgs, {
+    cwd: root,
+    stdio: ['inherit', 'inherit', 'pipe'],
+    encoding: 'utf8',
+  })
+  if (res.stderr) process.stderr.write(res.stderr)
+  if (res.error) fail(`Couldn't run gh: ${res.error.message}`)
+  if (res.status === 0) return
+  if (/HTTP 40[34]|not accessible/i.test(res.stderr ?? '')) {
+    fail(
+      "GitHub refused the request: your gh token can't write to this repo.\n" +
+        '  Fine-grained token: give it access to this repository with ' +
+        'Contents → "Read and write".\n' +
+        '  Classic token: it needs the "repo" scope.\n' +
+        '  Or log in through the browser instead: gh auth login --web',
+    )
+  }
+  fail(`gh ${ghArgs[0]} ${ghArgs[1]} failed (exit ${res.status}).`)
+}
+
+function releaseNotes(log, previous) {
+  return [
+    '## Download',
+    '',
+    `- **Windows 10/11:** \`TermBee_${version}_x64-setup.exe\``,
+    `- **macOS 11+ (Apple Silicon and Intel):** \`TermBee_${version}_universal.dmg\``,
+    '',
+    'These builds are not code-signed yet, so the first launch needs one extra click:',
+    '',
+    '- **Windows:** if SmartScreen says "Windows protected your PC", click **More info → Run anyway**.',
+    '- **macOS:** open the .dmg and drag TermBee to Applications. On first launch, if macOS',
+    '  blocks it, open **System Settings → Privacy & Security** and click **Open Anyway**.',
+    '',
+    "## What's changed",
+    '',
+    log || '- First release',
+    '',
+    previous ? `**Full changelog:** ${repoUrl}/compare/${previous}...${tag}` : '',
+  ].join('\n')
 }
 
 /** Runs a command quietly and returns its trimmed stdout, or null if it failed. */
@@ -91,6 +134,44 @@ if (!dryRun) {
       `${tag} already points at ${tagged.slice(0, 7)}, not your ${head.slice(0, 7)}. ` +
         'Check out that commit, or bump the version for a new release.',
     )
+  }
+}
+
+// --- Release (before the build, so a token without write access fails in seconds) ----------
+
+let repoUrl
+let wasDraft = false
+if (!dryRun) {
+  repoUrl = read('gh', ['repo', 'view', '--json', 'url', '--jq', '.url'])
+  const isDraft = read('gh', ['release', 'view', tag, '--json', 'isDraft', '--jq', '.isDraft'])
+  if (isDraft === null) {
+    step(`Creating release ${tag} as a draft (it is published after the upload)`)
+    const previous = read('git', ['describe', '--tags', '--abbrev=0', 'HEAD^'])
+    const log = read('git', [
+      'log',
+      '--no-merges',
+      '--format=- %s',
+      previous ? `${previous}..HEAD` : 'HEAD',
+    ])
+    const notesFile = join(tmpdir(), `termbee-${tag}-notes.md`)
+    writeFileSync(notesFile, releaseNotes(log, previous))
+    gh([
+      'release',
+      'create',
+      tag,
+      '--draft',
+      '--target',
+      head,
+      '--title',
+      `TermBee ${tag}`,
+      '--notes-file',
+      notesFile,
+    ])
+    rmSync(notesFile, { force: true })
+    wasDraft = true
+  } else {
+    wasDraft = isDraft === 'true'
+    step(`Release ${tag} exists${wasDraft ? ' (draft)' : ''}; this run adds its installer`)
   }
 }
 
@@ -150,58 +231,17 @@ if (dryRun) {
   process.exit(0)
 }
 
-// --- Release -------------------------------------------------------------------------------
-
-const repoUrl = read('gh', ['repo', 'view', '--json', 'url', '--jq', '.url'])
-
-if (read('gh', ['release', 'view', tag, '--json', 'tagName']) === null) {
-  step(`Creating release ${tag}`)
-  const previous = read('git', ['describe', '--tags', '--abbrev=0', 'HEAD^'])
-  const log = read('git', [
-    'log',
-    '--no-merges',
-    '--format=- %s',
-    previous ? `${previous}..HEAD` : 'HEAD',
-  ])
-  const notes = [
-    '## Download',
-    '',
-    `- **Windows 10/11:** \`TermBee_${version}_x64-setup.exe\``,
-    `- **macOS 11+ (Apple Silicon and Intel):** \`TermBee_${version}_universal.dmg\``,
-    '',
-    'These builds are not code-signed yet, so the first launch needs one extra click:',
-    '',
-    '- **Windows:** if SmartScreen says "Windows protected your PC", click **More info → Run anyway**.',
-    '- **macOS:** open the .dmg and drag TermBee to Applications. On first launch, if macOS',
-    '  blocks it, open **System Settings → Privacy & Security** and click **Open Anyway**.',
-    '',
-    "## What's changed",
-    '',
-    log || '- First release',
-    '',
-    previous ? `**Full changelog:** ${repoUrl}/compare/${previous}...${tag}` : '',
-  ].join('\n')
-  const notesFile = join(tmpdir(), `termbee-${tag}-notes.md`)
-  writeFileSync(notesFile, notes)
-  run('gh', [
-    'release',
-    'create',
-    tag,
-    '--target',
-    head,
-    '--title',
-    `TermBee ${tag}`,
-    '--notes-file',
-    notesFile,
-    ...(draft ? ['--draft'] : []),
-  ])
-  rmSync(notesFile, { force: true })
-} else {
-  step(`Release ${tag} exists; adding this platform's installer`)
-}
+// --- Upload --------------------------------------------------------------------------------
 
 step('Uploading')
-run('gh', ['release', 'upload', tag, ...assets, '--clobber'])
+gh(['release', 'upload', tag, ...assets, '--clobber'])
 
-console.log(`\n✔ ${tag} is up: ${repoUrl}/releases/tag/${tag}`)
-if (draft) console.log('  It is a draft. Publish it on GitHub when both installers are attached.')
+if (wasDraft && !draft) {
+  step('Publishing')
+  gh(['release', 'edit', tag, '--draft=false', '--latest'])
+}
+
+console.log(`\n✔ ${tag}: ${repoUrl}/releases/tag/${tag}`)
+if (wasDraft && draft) {
+  console.log('  Still a draft. Publish it on GitHub once both installers are attached.')
+}
