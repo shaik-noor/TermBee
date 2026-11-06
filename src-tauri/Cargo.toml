@@ -1,0 +1,50 @@
+[package]
+name = "termbee"
+version = "0.1.0"
+description = "TermBee — a fast, friendly SSH terminal for Windows and macOS"
+authors = ["Shaik Noor"]
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[lib]
+# The `_lib` suffix avoids a name clash with the bin target on Windows (cargo#8519).
+name = "termbee_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-window-state = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+log = "0.4"
+
+tokio = { version = "1", features = ["net", "sync", "time", "macros", "rt-multi-thread", "fs", "io-util"] }
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa", "flate2"] }
+# OS keychain: Windows Credential Manager + macOS Keychain. Secrets never touch disk or the UI.
+keyring = { version = "3", features = ["windows-native", "apple-native"] }
+russh-sftp = "3.0.1"
+trash = "5"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "s"
+panic = "abort"
