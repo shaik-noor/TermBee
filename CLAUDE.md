@@ -20,9 +20,11 @@ npm run lint           # biome lint .   (npm run check = lint + format --write)
 npm run check:rust     # cargo check
 npm run build          # installers for the current OS (macOS can't be built from Windows)
 npm run icons          # regenerate src-tauri/icons from assets/brand/termbee-icon.svg
+npm run release        # build this OS's installer and upload it to the GitHub release v<version>
 ```
 
-Before calling a change done, run the same checks as CI (`.github/workflows/build.yml`):
+Before calling a change done, run the checks (the same ones the manual
+`.github/workflows/build.yml` and `npm run release` run):
 
 ```bash
 npm run typecheck && npm run lint

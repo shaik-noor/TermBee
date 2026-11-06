@@ -78,14 +78,37 @@ npm run build        # Windows → src-tauri/target/release/bundle/nsis/TermBee_
                      # macOS   → …/bundle/dmg/TermBee_<ver>_<arch>.dmg (build on a Mac)
 ```
 
-You can't build for macOS from Windows. The GitHub Actions workflow
-(`.github/workflows/build.yml`) builds both platforms on every push and uploads the
-installers as artifacts.
+You can't build for macOS from Windows. Installers are built locally, not on GitHub
+Actions (the `checks` workflow only runs when started by hand, so it uses no minutes).
 
-**Releasing (not set up yet):** before shipping to other people, add code signing.
-Windows needs an Authenticode certificate. macOS needs a Developer ID and notarization
-(`APPLE_CERTIFICATE`, `APPLE_ID`, … as GitHub secrets). Auto-update needs
-`tauri-plugin-updater` and a signing key pair.
+## Release
+
+Releases are built on your own machines and uploaded to
+[GitHub Releases](https://github.com/shaik-noor/TermBee/releases), where users download
+them. You need the [GitHub CLI](https://cli.github.com), logged in once with `gh auth login`.
+
+1. Set the new version in **both** `package.json` and `src-tauri/Cargo.toml`, then commit
+   and push it to `main`.
+2. On Windows, run the release. It checks the code, builds `TermBee_<ver>_x64-setup.exe`,
+   creates the release `v<ver>` with notes, and uploads the installer:
+
+   ```bash
+   npm run release
+   ```
+
+3. On a Mac, pull the same commit and run the same command. It builds
+   `TermBee_<ver>_universal.dmg` (Apple Silicon + Intel) and adds it to the same release.
+
+Options: `-- --dry-run` builds without uploading, `-- --draft` creates the release as a
+draft so you can publish it once both installers are attached, and `-- --skip-checks`
+skips typecheck/lint/clippy/tests.
+
+The builds aren't code-signed yet. Windows SmartScreen asks users to click **More info →
+Run anyway**. The Mac app is ad-hoc signed, so macOS asks users to approve it once in
+**System Settings → Privacy & Security → Open Anyway**. The release notes explain both. To
+remove those prompts later, Windows needs an Authenticode certificate, and macOS needs a
+Developer ID plus notarization. Auto-update needs `tauri-plugin-updater` and a signing key
+pair.
 
 Regenerate the app icons after changing the logo with `npm run icons`.
 

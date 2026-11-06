@@ -26,7 +26,7 @@ contract, the session lifecycle and the design tokens.
 2. Keep each commit focused on one thing, with a message in the
    [Conventional Commits](https://www.conventionalcommits.org) style used in the history:
    `feat(ssh): …`, `fix(files): …`, `docs: …`, `chore: …`, `ci: …`.
-3. Run the same checks as CI before opening a pull request:
+3. Run the checks before opening a pull request (CI does not run them automatically):
 
    ```bash
    npm run typecheck && npm run lint
