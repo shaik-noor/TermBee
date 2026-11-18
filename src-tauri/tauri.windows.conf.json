@@ -12,7 +12,8 @@
         "center": true,
         "visible": false,
         "backgroundColor": "#15110B",
-        "decorations": false,
+        "decorations": true,
+        "theme": "Dark",
         "shadow": true
       }
     ]

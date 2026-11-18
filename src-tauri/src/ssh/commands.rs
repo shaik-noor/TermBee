@@ -107,3 +107,16 @@ pub async fn known_hosts_forget(
 ) -> AppResult<()> {
     state.known_hosts.forget(&hostname, port)
 }
+
+#[tauri::command]
+pub async fn ssh_test_connection(
+    state: State<'_, AppState>,
+    request: ConnectRequest,
+) -> AppResult<session::TestConnectionResult> {
+    if request.hostname.trim().is_empty() || request.username.trim().is_empty() {
+        return Err(AppError::Invalid(
+            "Enter a hostname and username first.".into(),
+        ));
+    }
+    Ok(session::test_connection(request, &state.known_hosts, &state.hosts).await)
+}

@@ -18,6 +18,8 @@ interface HostsState {
   moveFolder: (from: string, to: string) => Promise<void>
   /** Hosts and subfolders move up a level. */
   removeFolder: (path: string) => Promise<void>
+  /** Replace the store's hive state after an import. */
+  setHive: (hive: Hive) => void
 }
 
 /** Reorganize actions report failures as toasts; the store keeps the core's last answer. */
@@ -72,6 +74,7 @@ export const useHosts = create<HostsState>((set, get) => ({
   createFolder: (path) => apply(set, () => api.folders.create(path)),
   moveFolder: (from, to) => apply(set, () => api.folders.move(from, to)),
   removeFolder: (path) => apply(set, () => api.folders.remove(path)),
+  setHive: (hive) => set({ hosts: hive.hosts, folders: hive.folders, loaded: true }),
 }))
 
 /** Re-read hosts (e.g. after a login recorded `lastConnectedAt` / a remembered secret). */

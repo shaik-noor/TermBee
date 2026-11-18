@@ -67,3 +67,42 @@ pub async fn folders_move(state: State<'_, AppState>, from: String, to: String) 
 pub async fn folders_delete(state: State<'_, AppState>, path: String) -> AppResult<Hive> {
     state.hosts.delete_folder(&path)
 }
+
+/// Exports hosts, folders, trusted host keys, and optional keychain secrets to an `.xml` file.
+#[tauri::command]
+pub async fn hosts_export_xml(
+    state: State<'_, AppState>,
+    path: String,
+    include_secrets: bool,
+) -> AppResult<super::xml::ExportResult> {
+    super::xml::export_xml(
+        &state.hosts,
+        &state.known_hosts,
+        std::path::Path::new(&path),
+        include_secrets,
+    )
+}
+
+/// Parses an `.xml` export file and previews new hosts vs. conflicts against existing hosts.
+#[tauri::command]
+pub async fn hosts_import_preview(
+    state: State<'_, AppState>,
+    path: String,
+) -> AppResult<super::xml::ImportPreview> {
+    super::xml::import_preview(&state.hosts, std::path::Path::new(&path))
+}
+
+/// Applies an `.xml` import using the user's conflict resolutions (`skip`, `replace`, `keepBoth`).
+#[tauri::command]
+pub async fn hosts_import_apply(
+    state: State<'_, AppState>,
+    path: String,
+    resolutions: std::collections::HashMap<String, super::xml::ConflictResolution>,
+) -> AppResult<super::xml::ImportResult> {
+    super::xml::import_apply(
+        &state.hosts,
+        &state.known_hosts,
+        std::path::Path::new(&path),
+        &resolutions,
+    )
+}

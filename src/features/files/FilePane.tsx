@@ -239,7 +239,7 @@ export function FilePane({
           <nav
             aria-label="Path"
             onClick={(e) => e.target === e.currentTarget && setEditingPath(true)}
-            className="flex h-7 min-w-0 flex-1 cursor-text items-center overflow-x-auto rounded-md px-1 [scrollbar-width:none] hover:bg-surface-2"
+            className="group flex h-7 min-w-0 flex-1 cursor-text items-center overflow-x-auto rounded-md px-1 [scrollbar-width:none] hover:bg-surface-2"
             title={`${pane.cwd ?? ''} (click or ${mod}L to type a path)`}
           >
             {pane.cwd &&
@@ -266,6 +266,14 @@ export function FilePane({
                   </button>
                 </span>
               ))}
+            <button
+              type="button"
+              aria-label="Type or paste path"
+              onClick={() => setEditingPath(true)}
+              className="ml-auto grid size-5 shrink-0 place-items-center rounded text-subtle opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-3 hover:text-fg"
+            >
+              <Pencil className="size-3" />
+            </button>
           </nav>
         )}
 

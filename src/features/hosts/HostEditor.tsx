@@ -1,9 +1,12 @@
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import {
+  AlertTriangle,
   CaseSensitive,
+  CheckCircle2,
   FolderOpen,
   FolderSync,
   KeyRound,
+  Loader2,
   LockKeyhole,
   Monitor,
   Server,
@@ -25,6 +28,7 @@ import {
   type HostInput,
   type Protocol,
   type SecretUpdate,
+  type TestConnectionResult,
 } from '@/lib/ipc'
 import { isMac, isTauri } from '@/lib/platform'
 import { useHosts } from '@/stores/hosts'
@@ -232,6 +236,8 @@ function EditorBody({
   const [f, setF] = useState<Form>(() => initialForm(host, draft))
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null)
   const [keySuggestions, setKeySuggestions] = useState<string[]>([])
   const errors = touched ? validate(f) : {}
   const groups = useHosts((s) => s.folders)
@@ -243,10 +249,14 @@ function EditorBody({
       .catch(() => {})
   }, [])
 
-  const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((prev) => ({ ...prev, [k]: v }))
+  const set = <K extends keyof Form>(k: K, v: Form[K]) => {
+    setTestResult(null)
+    setF((prev) => ({ ...prev, [k]: v }))
+  }
 
   // Follow the protocol's default port unless the user typed their own; RDP is password-only.
-  const setProtocol = (protocol: Protocol) =>
+  const setProtocol = (protocol: Protocol) => {
+    setTestResult(null)
     setF((prev) => ({
       ...prev,
       protocol,
@@ -256,6 +266,7 @@ function EditorBody({
           : prev.port,
       authType: protocol === 'rdp' ? 'password' : prev.authType,
     }))
+  }
   const isRdp = f.protocol === 'rdp'
   // macOS's Windows App can't be handed a password; it asks and keeps its own copy.
   const rdpAsksItself = isRdp && isMac
@@ -272,6 +283,45 @@ function EditorBody({
 
   const secretUpdate = (value: string, clear: boolean): SecretUpdate =>
     value ? { action: 'set', value } : clear ? { action: 'clear' } : { action: 'keep' }
+
+  const runTest = async () => {
+    setTouched(true)
+    const v = validate(f)
+    if (v.hostname || v.port || v.username || v.keyPath) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await api.ssh.testConnection({
+        mode: f.protocol === 'sftp' ? 'sftp' : 'shell',
+        hostId:
+          host?.hostname === f.hostname.trim() &&
+          host.port === Number(f.port) &&
+          host.username === f.username.trim()
+            ? host.id
+            : null,
+        hostname: f.hostname.trim(),
+        port: Number(f.port),
+        username: f.username.trim(),
+        auth:
+          f.authType === 'key' ? { type: 'key', keyPath: f.keyPath.trim() } : { type: 'password' },
+        password: f.authType === 'password' && f.password ? f.password : null,
+        passphrase: f.authType === 'key' && f.passphrase ? f.passphrase : null,
+        remember: false,
+        cols: 80,
+        rows: 24,
+      })
+      setTestResult(res)
+    } catch (err) {
+      setTestResult({
+        ok: false,
+        hostKeyStatus: 'unknown',
+        fingerprint: null,
+        message: (err as Error).message,
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -324,17 +374,54 @@ function EditorBody({
       icon={<Server />}
       className="w-[min(620px,calc(100vw-32px))]"
       footer={
-        <>
-          <Button variant="ghost" onClick={onDone}>
-            Cancel
-          </Button>
-          <Button variant="honey" type="submit" form="host-form" disabled={saving}>
-            {saving ? 'Saving…' : host ? 'Save changes' : 'Add host'}
-          </Button>
-        </>
+        <div className="flex w-full items-center gap-2">
+          {!isRdp && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={testing || saving}
+              onClick={() => void runTest()}
+            >
+              {testing ? <Loader2 className="animate-spin" /> : null}
+              {testing ? 'Testing…' : 'Test connection'}
+            </Button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" onClick={onDone}>
+              Cancel
+            </Button>
+            <Button variant="honey" type="submit" form="host-form" disabled={saving}>
+              {saving ? 'Saving…' : host ? 'Save changes' : 'Add host'}
+            </Button>
+          </div>
+        </div>
       }
     >
       <form id="host-form" onSubmit={submit} className="space-y-5" noValidate>
+        {testResult && (
+          <div
+            className={cn(
+              'flex items-start gap-2.5 rounded-xl border p-3 text-xs animate-rise',
+              testResult.ok
+                ? 'border-clover/40 bg-clover/10 text-clover'
+                : 'border-rose/40 bg-rose/10 text-rose',
+            )}
+          >
+            {testResult.ok ? (
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+            ) : (
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">{testResult.message}</p>
+              {testResult.fingerprint && (
+                <p className="mt-1 truncate font-mono text-[11px] opacity-80">
+                  Key ({testResult.hostKeyStatus}): {testResult.fingerprint}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         {/* Identity */}
         <div className="flex items-center gap-4 rounded-xl border border-line bg-surface-2/50 p-3">
           <HexAvatar

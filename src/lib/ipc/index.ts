@@ -8,15 +8,20 @@ import { isTauri } from '../platform'
 import { mockInvoke } from './mock'
 import type {
   AppError,
+  ConflictResolution,
   ConnectRequest,
   DownloadTarget,
+  ExportResult,
   FileEntry,
   Hive,
   Host,
   HostInput,
+  ImportPreview,
+  ImportResult,
   KnownHost,
   Place,
   SessionEvent,
+  TestConnectionResult,
   TransferProgress,
 } from './types'
 
@@ -61,6 +66,11 @@ export const api = {
     move: (ids: string[], folder: string | null, before: string | null) =>
       call<Hive>('hosts_move', { ids, folder, before }),
     defaultKeyPaths: () => call<string[]>('ssh_default_key_paths'),
+    exportXml: (path: string, includeSecrets: boolean) =>
+      call<ExportResult>('hosts_export_xml', { path, includeSecrets }),
+    importPreview: (path: string) => call<ImportPreview>('hosts_import_preview', { path }),
+    importApply: (path: string, resolutions: Record<string, ConflictResolution>) =>
+      call<ImportResult>('hosts_import_apply', { path, resolutions }),
   },
   folders: {
     create: (path: string) => call<Hive>('folders_create', { path }),
@@ -83,6 +93,8 @@ export const api = {
     close: (sessionId: string) => call<void>('ssh_close', { sessionId }),
     answerHostKey: (sessionId: string, accept: boolean) =>
       call<void>('ssh_host_key_decision', { sessionId, accept }),
+    testConnection: (request: ConnectRequest) =>
+      call<TestConnectionResult>('ssh_test_connection', { request }),
   },
   /** File access on a session opened with `mode: 'sftp'`. */
   sftp: {

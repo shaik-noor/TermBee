@@ -2,6 +2,7 @@
 
 pub mod commands;
 pub mod folders;
+pub mod xml;
 
 use crate::{
     error::{AppError, AppResult},

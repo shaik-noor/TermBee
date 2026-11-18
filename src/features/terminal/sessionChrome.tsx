@@ -1,4 +1,5 @@
 import { FolderSync, SquareTerminal } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { HexAvatar, StatusHex, statusLabel } from '@/components/brand/hex'
 import { Tooltip } from '@/components/ui/menu'
 import { cn } from '@/lib/cn'
@@ -6,7 +7,7 @@ import type { Host } from '@/lib/ipc'
 import { useHosts } from '@/stores/hosts'
 import { type Tab, targetFromHost, useSessions } from '@/stores/sessions'
 import { useUi } from '@/stores/ui'
-import { ConnectingCard, EndedBar, ErrorCard, HostKeyCard, SecretCard } from './overlays'
+import { ConnectingCard, EndedBar, ErrorBar, ErrorCard, HostKeyCard, SecretCard } from './overlays'
 import type { useSshSession } from './useSshSession'
 
 type Session = ReturnType<typeof useSshSession>
@@ -74,8 +75,14 @@ export function SessionOverlay({ tab, session }: { tab: Tab; session: Session })
   const { close, reconnect } = useSessions.getState()
   const host = useHostOf(tab)
   const editHost = useUi((s) => s.editHost)
+  const [errorMinimized, setErrorMinimized] = useState(false)
   const o = session.overlay
   const t = tab.target
+
+  useEffect(() => {
+    if (o?.kind !== 'error') setErrorMinimized(false)
+  }, [o?.kind])
+
   return (
     <>
       {o?.kind === 'connecting' && (
@@ -93,14 +100,23 @@ export function SessionOverlay({ tab, session }: { tab: Tab; session: Session })
           onCancel={() => close(tab.id)}
         />
       )}
-      {o?.kind === 'error' && (
-        <ErrorCard
-          message={o.message}
-          onRetry={() => reconnect(tab.id)}
-          onClose={() => close(tab.id)}
-          onEdit={host ? () => editHost(host) : undefined}
-        />
-      )}
+      {o?.kind === 'error' &&
+        (errorMinimized ? (
+          <ErrorBar
+            message={o.message}
+            onExpand={() => setErrorMinimized(false)}
+            onRetry={() => reconnect(tab.id)}
+            onClose={() => close(tab.id)}
+          />
+        ) : (
+          <ErrorCard
+            message={o.message}
+            onRetry={() => reconnect(tab.id)}
+            onClose={() => close(tab.id)}
+            onEdit={host ? () => editHost(host) : undefined}
+            onViewOutput={tab.kind === 'terminal' ? () => setErrorMinimized(true) : undefined}
+          />
+        ))}
       {o?.kind === 'ended' && (
         <EndedBar
           exitStatus={o.exitStatus}

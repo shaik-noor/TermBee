@@ -1,5 +1,10 @@
+import { open as openFileDialog, save as saveFileDialog } from '@tauri-apps/plugin-dialog'
 import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
   Feather,
+  FileCode2,
   Gauge,
   Laptop,
   Moon,
@@ -8,14 +13,25 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Wordmark } from '@/components/brand/BeeMark'
+import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/cn'
 import { type EffectsPref, resolveEffects } from '@/lib/effects'
-import { api, type KnownHost } from '@/lib/ipc'
+import {
+  api,
+  type ConflictReason,
+  type ConflictResolution,
+  type ImportConflict,
+  type ImportPreview,
+  type KnownHost,
+} from '@/lib/ipc'
+import { isTauri } from '@/lib/platform'
+import { useHosts } from '@/stores/hosts'
 import { type CursorStyle, type ThemePref, usePrefs } from '@/stores/prefs'
 import { useUi } from '@/stores/ui'
 
@@ -29,7 +45,7 @@ export function SettingsDialog() {
         title="Settings"
         description="Make the hive yours."
         icon={<Settings2 />}
-        className="w-[min(600px,calc(100vw-32px))]"
+        className="w-[min(640px,calc(100vw-32px))]"
       >
         <SettingsBody />
       </DialogContent>
@@ -120,6 +136,8 @@ function SettingsBody() {
         </Row>
       </Group>
 
+      <BackupAndMigrationGroup />
+
       <KnownHostsGroup />
 
       <div className="flex items-center justify-between border-t border-line pt-4 text-xs text-subtle">
@@ -127,6 +145,275 @@ function SettingsBody() {
         <span>v{__APP_VERSION__} · Passwords are stored in your system keychain only.</span>
       </div>
     </div>
+  )
+}
+
+const REASON_LABELS: Record<ConflictReason, string> = {
+  sameId: 'Same host ID',
+  sameAddress: 'Same user@host:port',
+  sameName: 'Same name in folder',
+}
+
+function BackupAndMigrationGroup() {
+  const hosts = useHosts((s) => s.hosts)
+  const setHive = useHosts((s) => s.setHive)
+  const [includeSecrets, setIncludeSecrets] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState<ImportPreview | null>(null)
+  const [resolutions, setResolutions] = useState<Record<string, ConflictResolution>>({})
+
+  const handleExport = async () => {
+    setBusy(true)
+    try {
+      let path: string | null = 'termbee-hive.xml'
+      if (isTauri) {
+        path = await saveFileDialog({
+          title: 'Export TermBee Hive (.xml)',
+          defaultPath: `termbee-hive-${new Date().toISOString().slice(0, 10)}.xml`,
+          filters: [{ name: 'TermBee XML', extensions: ['xml'] }],
+        })
+      }
+      if (!path) return
+      const res = await api.hosts.exportXml(path, includeSecrets)
+      toast.success(
+        `Exported ${res.hostsCount} ${res.hostsCount === 1 ? 'host' : 'hosts'} to XML`,
+        {
+          description: res.includedSecrets
+            ? 'Saved keychain passwords and passphrases were included in the export.'
+            : 'Exported without passwords or passphrases.',
+        },
+      )
+    } catch (err) {
+      toast.error('Couldn’t export XML', { description: (err as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleChooseImport = async () => {
+    setBusy(true)
+    try {
+      let path: string | null = 'termbee-hive.xml'
+      if (isTauri) {
+        const picked = await openFileDialog({
+          title: 'Import TermBee Hive (.xml)',
+          multiple: false,
+          directory: false,
+          filters: [{ name: 'TermBee XML', extensions: ['xml'] }],
+        })
+        path = typeof picked === 'string' ? picked : null
+      }
+      if (!path) return
+      const p = await api.hosts.importPreview(path)
+      const initial: Record<string, ConflictResolution> = {}
+      for (const c of p.conflicts) {
+        initial[c.incomingId] = 'skip'
+      }
+      setResolutions(initial)
+      setPreview(p)
+    } catch (err) {
+      toast.error('Couldn’t read XML file', { description: (err as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const setAllResolutions = (action: ConflictResolution) => {
+    if (!preview) return
+    const next: Record<string, ConflictResolution> = {}
+    for (const c of preview.conflicts) {
+      next[c.incomingId] = action
+    }
+    setResolutions(next)
+  }
+
+  const applyImport = async () => {
+    if (!preview) return
+    setBusy(true)
+    try {
+      const res = await api.hosts.importApply(preview.path, resolutions)
+      setHive(res.hive)
+      setPreview(null)
+      const parts: string[] = []
+      if (res.added > 0) parts.push(`${res.added} added`)
+      if (res.replaced > 0) parts.push(`${res.replaced} replaced`)
+      if (res.skipped > 0) parts.push(`${res.skipped} skipped`)
+      toast.success('Hive import complete', {
+        description: parts.length ? parts.join(' · ') : 'No changes were needed.',
+      })
+    } catch (err) {
+      toast.error('Couldn’t import XML', { description: (err as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Group title="Backup & migration (XML)" icon={<FileCode2 className="size-3.5 text-honey" />}>
+      <p className="text-xs leading-relaxed text-subtle">
+        Moving to another laptop or reinstalling? Export your hosts, folders, trusted keys, and
+        keychain logins to a <code className="font-mono text-muted">.xml</code> file and import them
+        anytime.
+      </p>
+      <Row
+        label="Include saved passwords & passphrases"
+        hint={
+          includeSecrets
+            ? 'Writes saved passwords and passphrases into an unencrypted file'
+            : 'Exports only host addresses, folders, and settings (no secrets)'
+        }
+      >
+        <Toggle checked={includeSecrets} onChange={setIncludeSecrets} />
+      </Row>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || hosts.length === 0}
+          onClick={() => void handleExport()}
+        >
+          <Download /> Export to .xml…
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => void handleChooseImport()}
+        >
+          <Upload /> Import from .xml…
+        </Button>
+      </div>
+
+      {preview && (
+        <div className="mt-3 space-y-3 rounded-xl border border-honey/40 bg-surface-2/60 p-3.5 animate-rise">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold">Review XML import</div>
+              <div className="text-xs text-subtle">
+                {preview.newHosts.length} new {preview.newHosts.length === 1 ? 'host' : 'hosts'} ·{' '}
+                {preview.conflicts.length}{' '}
+                {preview.conflicts.length === 1 ? 'conflict' : 'conflicts'} · {preview.foldersCount}{' '}
+                {preview.foldersCount === 1 ? 'folder' : 'folders'}
+                {preview.includesSecrets ? ' · Includes keychain logins' : ''}
+                {preview.knownHostsCount > 0
+                  ? ` · ${preview.knownHostsCount} trusted SSH keys`
+                  : ''}
+              </div>
+            </div>
+            {preview.conflicts.length > 1 && (
+              <div className="flex items-center gap-1 text-[11px]">
+                <span className="mr-1 text-subtle">All conflicts:</span>
+                <button
+                  type="button"
+                  onClick={() => setAllResolutions('replace')}
+                  className="rounded border border-line bg-surface px-2 py-0.5 text-muted hover:border-honey/50 hover:text-fg"
+                >
+                  Replace all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllResolutions('keepBoth')}
+                  className="rounded border border-line bg-surface px-2 py-0.5 text-muted hover:border-honey/50 hover:text-fg"
+                >
+                  Keep both
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllResolutions('skip')}
+                  className="rounded border border-line bg-surface px-2 py-0.5 text-muted hover:border-honey/50 hover:text-fg"
+                >
+                  Skip all
+                </button>
+              </div>
+            )}
+          </div>
+
+          {preview.conflicts.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-amber">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                <span>
+                  {preview.conflicts.length === 1
+                    ? '1 host conflicts with an existing host in your hive. Choose how to resolve it:'
+                    : `${preview.conflicts.length} hosts conflict with existing hosts in your hive. Choose how to resolve each:`}
+                </span>
+              </div>
+              <ul className="max-h-56 divide-y divide-line overflow-y-auto rounded-lg border border-line bg-surface">
+                {preview.conflicts.map((c) => (
+                  <ConflictRow
+                    key={c.incomingId}
+                    conflict={c}
+                    value={resolutions[c.incomingId] ?? 'replace'}
+                    onChange={(v) => setResolutions((prev) => ({ ...prev, [c.incomingId]: v }))}
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-clover">
+              <CheckCircle2 className="size-4 shrink-0" />
+              <span>
+                No conflicts found — all {preview.newHosts.length} hosts are ready to add.
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setPreview(null)}>
+              Cancel
+            </Button>
+            <Button variant="honey" size="sm" disabled={busy} onClick={() => void applyImport()}>
+              {busy ? 'Importing…' : 'Apply import'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Group>
+  )
+}
+
+function ConflictRow({
+  conflict,
+  value,
+  onChange,
+}: {
+  conflict: ImportConflict
+  value: ConflictResolution
+  onChange: (v: ConflictResolution) => void
+}) {
+  const { incoming, existing, reason } = conflict
+  return (
+    <li className="flex flex-col gap-2 p-2.5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-xs font-semibold">{incoming.label}</span>
+          <span className="rounded bg-amber/15 px-1.5 py-px text-[10px] font-medium text-amber">
+            {REASON_LABELS[reason]}
+          </span>
+        </div>
+        <div className="truncate font-mono text-[11px] text-subtle">
+          XML: {incoming.username}@{incoming.hostname}:{incoming.port}
+          {incoming.group ? ` (${incoming.group})` : ''}
+        </div>
+        {(existing.label !== incoming.label ||
+          existing.hostname !== incoming.hostname ||
+          existing.port !== incoming.port ||
+          existing.username !== incoming.username) && (
+          <div className="truncate font-mono text-[11px] text-subtle">
+            Current: {existing.label} · {existing.username}@{existing.hostname}:{existing.port}
+          </div>
+        )}
+      </div>
+      <Segmented<ConflictResolution>
+        value={value}
+        onChange={onChange}
+        options={[
+          { value: 'replace', label: 'Replace' },
+          { value: 'keepBoth', label: 'Keep both' },
+          { value: 'skip', label: 'Skip' },
+        ]}
+      />
+    </li>
   )
 }
 

@@ -1,3 +1,4 @@
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { CopyPlus, Hexagon, PanelLeft, Plus, RotateCw, Search, Settings2, X } from 'lucide-react'
 import { motion } from 'motion/react'
 import { BeeMark } from '@/components/brand/BeeMark'
@@ -14,16 +15,15 @@ import {
   Tooltip,
 } from '@/components/ui/menu'
 import { cn } from '@/lib/cn'
-import { isMac } from '@/lib/platform'
+import { isMac, isTauri } from '@/lib/platform'
 import { label as shortcut } from '@/lib/shortcuts'
 import { usePrefs } from '@/stores/prefs'
 import { HOME, type Tab, useSessions } from '@/stores/sessions'
 import { useUi } from '@/stores/ui'
-import { WindowControls } from './WindowControls'
 
 /**
- * The window's top bar: brand, tabs, search, settings, and (Windows) caption buttons.
- * Empty areas carry `data-tauri-drag-region` so the window can be dragged/maximized.
+ * The app toolbar: brand, tabs, quick-search trigger, and settings. Window controls are
+ * always supplied by the operating system.
  */
 export function TitleBar() {
   const tabs = useSessions((s) => s.tabs)
@@ -34,25 +34,40 @@ export function TitleBar() {
   const sidebarOpen = usePrefs((s) => s.sidebarOpen)
   const setPrefs = usePrefs((s) => s.set)
 
+  const onHeaderDoubleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (!isMac || !isTauri) return
+    if ((e.target as HTMLElement).closest('button, input, a, [role="tab"]')) return
+    void getCurrentWindow().toggleMaximize()
+  }
+
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: double-clicking empty titlebar space toggles maximize
     <header
-      data-tauri-drag-region
-      className="relative z-20 flex h-11 shrink-0 items-stretch border-b border-line bg-bg"
+      data-tauri-drag-region={isMac ? true : undefined}
+      onDoubleClick={onHeaderDoubleClick}
+      className="relative z-20 flex h-11 shrink-0 items-stretch border-b border-line bg-surface/60 backdrop-blur-md select-none"
     >
-      {/* Brand (leaves room for macOS traffic lights) */}
+      {/* Left brand cell: clears the native macOS traffic lights and aligns with the sidebar. */}
       <div
-        data-tauri-drag-region
-        className={cn('flex items-center gap-2 pr-3', isMac ? 'pl-[84px]' : 'pl-3.5')}
+        data-tauri-drag-region={isMac ? true : undefined}
+        className={cn(
+          'flex shrink-0 items-center gap-2.5 border-r border-line px-3 transition-[width] duration-200',
+          sidebarOpen ? 'w-60' : 'w-auto',
+          isMac && 'pl-[84px]',
+        )}
       >
-        <BeeMark className="pointer-events-none h-5" />
-        {!isMac && (
+        <div
+          data-tauri-drag-region={isMac ? true : undefined}
+          className="flex items-center gap-1.5"
+        >
+          <BeeMark className="pointer-events-none h-5 shrink-0" />
           <span
-            data-tauri-drag-region
-            className="font-display text-[13px] font-semibold tracking-tight"
+            data-tauri-drag-region={isMac ? true : undefined}
+            className="font-display text-[13px] font-bold tracking-tight text-fg"
           >
             Term<span className="text-honey">Bee</span>
           </span>
-        )}
+        </div>
         <Tooltip label={`${sidebarOpen ? 'Hide' : 'Show'} sidebar (${shortcut('sidebar')})`}>
           <Button
             variant="ghost"
@@ -60,7 +75,7 @@ export function TitleBar() {
             aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             aria-pressed={sidebarOpen}
             onClick={() => setPrefs({ sidebarOpen: !sidebarOpen })}
-            className="ml-1.5"
+            className={cn('ml-auto', sidebarOpen && 'bg-surface-2 text-fg')}
           >
             <PanelLeft />
           </Button>
@@ -69,9 +84,10 @@ export function TitleBar() {
 
       {/* Tabs */}
       <div
+        data-tauri-drag-region={isMac ? true : undefined}
         aria-label="Tabs"
         role="tablist"
-        className="flex min-w-0 items-end gap-0.5 overflow-x-auto pt-1.5 [scrollbar-width:none]"
+        className="flex min-w-0 items-center gap-1 overflow-x-auto px-2 [scrollbar-width:none]"
       >
         <TabButton active={activeId === HOME} onClick={() => activate(HOME)} label="Hive">
           <Hexagon className="size-3.5 text-honey" strokeWidth={2.4} />
@@ -85,23 +101,26 @@ export function TitleBar() {
             type="button"
             aria-label="New tab"
             onClick={() => setPalette(true)}
-            className="mb-1 ml-1 grid size-7 shrink-0 place-items-center self-center rounded-md text-muted hover:bg-surface-3 hover:text-fg"
+            className="ml-0.5 grid size-7 shrink-0 place-items-center rounded-lg border border-transparent text-muted transition-colors hover:border-line hover:bg-surface-2 hover:text-fg"
           >
-            <Plus className="size-4" />
+            <Plus className="size-3.5" />
           </button>
         </Tooltip>
       </div>
 
-      <div data-tauri-drag-region className="min-w-6 flex-1" />
+      <div data-tauri-drag-region={isMac ? true : undefined} className="min-w-4 flex-1" />
 
       {/* Right cluster */}
-      <div className="flex items-center gap-1.5 pr-2">
+      <div
+        data-tauri-drag-region={isMac ? true : undefined}
+        className="flex items-center gap-1.5 pr-2.5"
+      >
         <button
           type="button"
           onClick={() => setPalette(true)}
-          className="flex h-7 w-56 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-xs text-subtle transition-colors hover:border-honey/40 hover:text-muted max-lg:w-36"
+          className="flex h-7 w-56 items-center gap-2 rounded-lg border border-line bg-bg/70 px-2.5 text-xs text-subtle transition-colors hover:border-honey/40 hover:bg-surface hover:text-muted max-lg:w-36"
         >
-          <Search className="size-3.5" />
+          <Search className="size-3.5 text-honey/80" />
           <span className="truncate">Find or connect…</span>
           <Kbd className="ml-auto max-lg:hidden">{shortcut('palette')}</Kbd>
         </button>
@@ -117,11 +136,6 @@ export function TitleBar() {
           </Button>
         </Tooltip>
       </div>
-      {!isMac && (
-        <div className="border-l border-line">
-          <WindowControls />
-        </div>
-      )}
     </header>
   )
 }
@@ -143,14 +157,16 @@ function TabButton({
   return (
     <div
       className={cn(
-        'group relative flex h-8 max-w-52 min-w-0 shrink-0 items-center rounded-t-lg text-[13px] transition-colors duration-150',
-        active ? 'bg-surface text-fg' : 'text-muted hover:bg-surface/60 hover:text-fg',
+        'group relative flex h-7 max-w-52 min-w-0 shrink-0 items-center rounded-lg border text-[12.5px] font-medium transition-colors duration-150',
+        active
+          ? 'border-line-strong bg-bg text-fg shadow-2xs'
+          : 'border-transparent text-muted hover:border-line/60 hover:bg-surface-2/70 hover:text-fg',
       )}
     >
       {active && (
         <motion.span
           layoutId="tab-active"
-          className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-honey"
+          className="absolute inset-x-2.5 -bottom-px h-0.5 rounded-full bg-honey"
           transition={{ type: 'spring', stiffness: 520, damping: 38 }}
         />
       )}
@@ -160,11 +176,14 @@ function TabButton({
         aria-selected={active}
         aria-label={label}
         onClick={onClick}
-        className={cn('flex h-full min-w-0 items-center gap-2 pl-3', trailing ? 'pr-1' : 'pr-3')}
+        className={cn(
+          'flex h-full min-w-0 items-center gap-1.5 pl-2.5',
+          trailing ? 'pr-1' : 'pr-2.5',
+        )}
       >
         {children}
       </button>
-      {trailing && <div className="pr-1.5">{trailing}</div>}
+      {trailing && <div className="pr-1">{trailing}</div>}
     </div>
   )
 }
@@ -191,7 +210,7 @@ function SessionTab({ tab, active }: { tab: Tab; active: boolean }) {
                 aria-label={`Close ${tab.target.label}`}
                 onClick={() => close(tab.id)}
                 className={cn(
-                  'grid size-5 place-items-center rounded text-subtle hover:bg-surface-3 hover:text-fg',
+                  'grid size-4.5 place-items-center rounded text-subtle hover:bg-surface-3 hover:text-fg',
                   active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
                 )}
               >

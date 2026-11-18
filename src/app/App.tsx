@@ -37,11 +37,14 @@ export function App() {
   useEffect(() => {
     const apply = () => document.documentElement.classList.toggle('dark', resolveDark(theme))
     apply()
+    if (isTauri) {
+      void getCurrentWindow().setTheme(theme === 'system' ? null : dark ? 'dark' : 'light')
+    }
     if (theme !== 'system') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     mq.addEventListener('change', apply)
     return () => mq.removeEventListener('change', apply)
-  }, [theme])
+  }, [theme, dark])
 
   useEffect(() => applyEffects(effects), [effects])
 

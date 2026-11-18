@@ -1,6 +1,6 @@
 [package]
 name = "termbee"
-version = "0.1.0"
+version = "0.2.0"
 description = "TermBee — a fast, friendly SSH terminal for Windows and macOS"
 authors = ["Shaik Noor"]
 edition = "2021"
@@ -31,7 +31,7 @@ log = "0.4"
 
 tokio = { version = "1", features = ["net", "sync", "time", "macros", "rt-multi-thread", "fs", "io-util"] }
 russh = { version = "0.65", default-features = false, features = ["ring", "rsa", "flate2"] }
-# OS keychain: Windows Credential Manager + macOS Keychain. Secrets never touch disk or the UI.
+# OS keychain: Windows Credential Manager + macOS Keychain.
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 russh-sftp = "3.0.1"
 trash = "5"

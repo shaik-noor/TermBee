@@ -35,8 +35,32 @@ export function HiveHome() {
   const tabs = useSessions((s) => s.tabs)
   const live = useLiveCounts()
   const editHost = useUi((s) => s.editHost)
+  const setSettings = useUi((s) => s.setSettings)
+  const [protocolFilter, setProtocolFilter] = useState<'all' | 'ssh' | 'sftp' | 'rdp'>('all')
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+
   const recents = useMemo(() => recentHosts(hosts), [hosts])
-  const groups = useMemo(() => groupHosts(hosts), [hosts])
+  const topTags = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const h of hosts) {
+      for (const t of h.tags) counts.set(t, (counts.get(t) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 8)
+      .map(([t]) => t)
+  }, [hosts])
+
+  const filteredHosts = useMemo(
+    () =>
+      hosts.filter(
+        (h) =>
+          (protocolFilter === 'all' || h.protocol === protocolFilter) &&
+          (!tagFilter || h.tags.includes(tagFilter)),
+      ),
+    [hosts, protocolFilter, tagFilter],
+  )
+  const groups = useMemo(() => groupHosts(filteredHosts), [filteredHosts])
   const liveCount = tabs.filter((t) => t.status === 'connected').length
 
   return (
@@ -70,10 +94,10 @@ export function HiveHome() {
 
       <div className="mx-auto max-w-6xl px-8 py-6">
         {!loaded ? null : hosts.length === 0 ? (
-          <EmptyHive onAdd={() => editHost('new')} />
+          <EmptyHive onAdd={() => editHost('new')} onImport={() => setSettings(true)} />
         ) : (
           <>
-            {recents.length > 0 && (
+            {recents.length > 0 && protocolFilter === 'all' && !tagFilter && (
               <section className="mb-7">
                 <SectionTitle icon={<Clock3 />} title="Jump back in" />
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
@@ -105,16 +129,76 @@ export function HiveHome() {
               </section>
             )}
 
-            {groups.map(([group, list]) => (
-              <section key={group} className="mb-7">
-                <SectionTitle title={folderTitle(group)} count={list.length} />
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(236px,1fr))] gap-3">
-                  {list.map((h, i) => (
-                    <HostCard key={h.id} host={h} live={live[h.id] ?? 0} index={i} />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {(hosts.length >= 2 || topTags.length > 0) && (
+              <div className="mb-5 flex flex-wrap items-center gap-1.5">
+                {(['all', 'ssh', 'sftp', 'rdp'] as const).map((p) => {
+                  const active = protocolFilter === p
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setProtocolFilter(p)}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-honey/60 bg-honey text-honey-fg'
+                          : 'border-line bg-surface-2/60 text-muted hover:border-line-strong hover:text-fg',
+                      )}
+                    >
+                      {p === 'all' ? 'All' : p.toUpperCase()}
+                    </button>
+                  )
+                })}
+                {topTags.length > 0 && <span className="mx-1 h-4 w-px bg-line" />}
+                {topTags.map((tag) => {
+                  const active = tagFilter === tag
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setTagFilter(active ? null : tag)}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        active
+                          ? 'border-honey/60 bg-honey-soft text-fg'
+                          : 'border-line bg-surface/60 text-subtle hover:border-line-strong hover:text-fg',
+                      )}
+                    >
+                      #{tag}
+                    </button>
+                  )
+                })}
+                {(protocolFilter !== 'all' || tagFilter !== null) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProtocolFilter('all')
+                      setTagFilter(null)
+                    }}
+                    className="ml-auto text-xs text-subtle hover:text-fg"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            )}
+
+            {groups.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-6 py-10 text-center text-sm text-subtle">
+                No hosts match the active filters.
+              </div>
+            ) : (
+              groups.map(([group, list]) => (
+                <section key={group} className="mb-7">
+                  <SectionTitle title={folderTitle(group)} count={list.length} />
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(236px,1fr))] gap-3">
+                    {list.map((h, i) => (
+                      <HostCard key={h.id} host={h} live={live[h.id] ?? 0} index={i} />
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
           </>
         )}
       </div>
@@ -207,7 +291,7 @@ function QuickConnect({ className }: { className?: string }) {
   )
 }
 
-function EmptyHive({ onAdd }: { onAdd: () => void }) {
+function EmptyHive({ onAdd, onImport }: { onAdd: () => void; onImport: () => void }) {
   return (
     <div className="relative mx-auto mt-4 max-w-2xl overflow-hidden rounded-3xl border border-dashed border-honey/30 bg-surface/70 px-10 py-12 text-center animate-rise">
       <div className="bg-honeycomb absolute inset-0 opacity-60 [mask-image:radial-gradient(circle_at_50%_0%,black,transparent_75%)]" />
@@ -218,9 +302,14 @@ function EmptyHive({ onAdd }: { onAdd: () => void }) {
           Add a server once and TermBee remembers it: its address, its login and its host key.
           Passwords go straight to your system keychain, never to a file.
         </p>
-        <Button variant="honey" size="lg" className="mt-7" onClick={onAdd}>
-          <Plus /> Add your first host
-        </Button>
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <Button variant="honey" size="lg" onClick={onAdd}>
+            <Plus /> Add your first host
+          </Button>
+          <Button variant="outline" size="lg" onClick={onImport}>
+            Import from .xml…
+          </Button>
+        </div>
         <div className="mt-9 grid grid-cols-3 gap-3 text-left">
           <Tip
             icon={<Zap />}

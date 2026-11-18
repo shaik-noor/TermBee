@@ -110,6 +110,13 @@ export type SessionEvent =
   | { type: 'error'; message: string }
   | { type: 'closed'; exitStatus: number | null }
 
+export interface TestConnectionResult {
+  ok: boolean
+  hostKeyStatus: 'trusted' | 'unknown' | 'changed'
+  fingerprint: string | null
+  message: string
+}
+
 export interface KnownHost {
   hostname: string
   port: number
@@ -154,6 +161,62 @@ export interface Place {
 
 /** Where a download goes: a path the user picked, or a folder (keeps the remote name). */
 export type DownloadTarget = { type: 'file'; path: string } | { type: 'dir'; dir: string }
+
+/** Why an incoming XML host conflicts with an already saved host. */
+export type ConflictReason = 'sameId' | 'sameAddress' | 'sameName'
+
+/** How to resolve a conflicting host during XML import. */
+export type ConflictResolution = 'skip' | 'replace' | 'keepBoth'
+
+export interface ImportHostSummary {
+  id: string
+  protocol: Protocol
+  label: string
+  hostname: string
+  port: number
+  username: string
+  authType: 'password' | 'key'
+  keyPath: string | null
+  group: string | null
+  tags: string[]
+  color: HostColor
+  icon: string | null
+  favorite: boolean
+  hasPassword: boolean
+  hasPassphrase: boolean
+}
+
+export interface ImportConflict {
+  incomingId: string
+  reason: ConflictReason
+  incoming: ImportHostSummary
+  existing: ImportHostSummary
+}
+
+export interface ImportPreview {
+  path: string
+  totalHosts: number
+  newHosts: ImportHostSummary[]
+  conflicts: ImportConflict[]
+  foldersCount: number
+  knownHostsCount: number
+  includesSecrets: boolean
+}
+
+export interface ExportResult {
+  path: string
+  hostsCount: number
+  foldersCount: number
+  knownHostsCount: number
+  includedSecrets: boolean
+}
+
+export interface ImportResult {
+  hive: Hive
+  added: number
+  replaced: number
+  skipped: number
+}
 
 /** Shape of every error a command can reject with (see src-tauri/src/error.rs). */
 export interface AppError {

@@ -28,22 +28,24 @@ If it needs a new plugin permission, add it to `src-tauri/capabilities/default.j
 Errors are always `{ kind, message }` (`AppError` in `error.rs`). Messages are written for
 people, so the UI shows them as-is.
 
-| Command                                      | Purpose                                                                                                |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `hosts_list` / `hosts_save` / `hosts_delete` | Saved hosts. `hosts_save` takes `SecretUpdate`s (`keep`/`set`/`clear`) for the password and passphrase |
-| `ssh_default_key_paths`                      | Existing `~/.ssh/id_*` keys for the picker                                                             |
-| `ssh_connect(request, onEvent: Channel)`     | Starts a session and returns its id. Everything else streams over the channel                          |
-| `ssh_write` / `ssh_resize` / `ssh_close`     | Input, PTY size, hang up                                                                               |
-| `ssh_host_key_decision`                      | Answers a paused `hostKey` event                                                                       |
-| `known_hosts_list` / `known_hosts_forget`    | Trusted host keys (Settings)                                                                           |
-| `rdp_open(hostId)`                           | Opens a saved RDP host in the OS client. Fails with `clientMissing` if Windows App isn't on the Mac    |
-| `hosts_hive` / `hosts_move`                  | Hosts plus every folder path; drag-and-drop moves (`ids`, `folder`, `before`). Both return a `Hive`    |
-| `folders_create` / `folders_move` / `folders_delete` | Folder tree edits. Move = rename or reparent with contents; delete moves contents up a level |
-| `sftp_home` / `sftp_list` / `sftp_mkdir` / `sftp_rename` / `sftp_delete` | File ops on a session opened with `mode: 'sftp'` (`sessionId`) |
-| `sftp_download` / `sftp_upload` / `sftp_copy` / `sftp_cancel_transfer` | Files **or folders**, streamed with a `Progress` channel (bytes + files, ≤10/s) and a cancel flag per `transferId` |
-| `sftp_read` / `sftp_write_text` | First N bytes as raw `ArrayBuffer` (preview), and save text back (the editor) |
-| `local_places` / `local_list` / `local_mkdir` / `local_rename` / `local_copy` / `local_trash` | The This PC pane. Delete always goes to the Recycle Bin / Trash |
-| `local_read` / `local_open` / `local_reveal` | Local preview bytes, open with the default app, show in Explorer / Finder |
+| Command                                                                                       | Purpose                                                                                                            |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `hosts_list` / `hosts_save` / `hosts_delete`                                                  | Saved hosts. `hosts_save` takes `SecretUpdate`s (`keep`/`set`/`clear`) for the password and passphrase             |
+| `ssh_default_key_paths`                                                                       | Existing `~/.ssh/id_*` keys for the picker                                                                         |
+| `ssh_connect(request, onEvent: Channel)`                                                      | Starts a session and returns its id. Everything else streams over the channel                                      |
+| `ssh_write` / `ssh_resize` / `ssh_close`                                                      | Input, PTY size, hang up                                                                                           |
+| `ssh_host_key_decision`                                                                       | Answers a paused `hostKey` event                                                                                   |
+| `known_hosts_list` / `known_hosts_forget`                                                     | Trusted host keys (Settings)                                                                                       |
+| `rdp_open(hostId)`                                                                            | Opens a saved RDP host in the OS client. Fails with `clientMissing` if Windows App isn't on the Mac                |
+| `hosts_hive` / `hosts_move`                                                                   | Hosts plus every folder path; drag-and-drop moves (`ids`, `folder`, `before`). Both return a `Hive`                |
+| `folders_create` / `folders_move` / `folders_delete`                                          | Folder tree edits. Move = rename or reparent with contents; delete moves contents up a level                       |
+| `sftp_home` / `sftp_list` / `sftp_mkdir` / `sftp_rename` / `sftp_delete`                      | File ops on a session opened with `mode: 'sftp'` (`sessionId`)                                                     |
+| `sftp_download` / `sftp_upload` / `sftp_copy` / `sftp_cancel_transfer`                        | Files **or folders**, streamed with a `Progress` channel (bytes + files, ≤10/s) and a cancel flag per `transferId` |
+| `sftp_read` / `sftp_write_text`                                                               | First N bytes as raw `ArrayBuffer` (preview), and save text back (the editor)                                      |
+| `local_places` / `local_list` / `local_mkdir` / `local_rename` / `local_copy` / `local_trash` | The This PC pane. Delete always goes to the Recycle Bin / Trash                                                    |
+| `local_read` / `local_open` / `local_reveal`                                                  | Local preview bytes, open with the default app, show in Explorer / Finder                                          |
+| `hosts_export_xml` / `hosts_import_preview` / `hosts_import_apply` | Migrate the Hive using XML, with conflict review before importing. Passwords and passphrases are optional and plaintext in exported files. |
+| `ssh_test_connection` | Tests SSH/SFTP login for trusted server keys without saving credentials or changing the Hive. |
 
 ## Remote Desktop hosts (`rdp/`)
 
@@ -133,7 +135,7 @@ Event types are defined in `ssh/events.rs`, mirrored as `SessionEvent` in TS.
 - `components/brand/icons.tsx`: `PROTOCOLS` (SSH/SFTP/RDP icon + fixed color, shown as the badge on
   every `HexAvatar`) and `HOST_ICONS` (the picker set stored in `Host.icon`).
 - `features/shell/`: the title bar (tabs, macOS traffic-light inset / Windows caption
-  buttons, `data-tauri-drag-region`) and the sidebar.
+  title bar, macOS drag regions) and the sidebar.
 - `stores/`: `hosts` (mirrors the core), `sessions` (tabs; `attempt` bumps trigger a
   reconnect), `ui` (open dialogs), `prefs` (persisted UI preferences only).
 - `lib/shortcuts.ts`: one shortcut table. macOS uses ⌘. Windows uses Ctrl+Shift so shell keys

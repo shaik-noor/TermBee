@@ -230,6 +230,97 @@ export async function mockInvoke<T>(cmd: string, args: Record<string, unknown> =
     }
     case 'ssh_default_key_paths':
       return ['~/.ssh/id_ed25519', '~/.ssh/id_rsa'] as T
+    case 'hosts_export_xml': {
+      const h = hive()
+      return {
+        path: (args.path as string) || 'termbee-hive.xml',
+        hostsCount: h.hosts.length,
+        foldersCount: h.folders.length,
+        knownHostsCount: 0,
+        includedSecrets: Boolean(args.includeSecrets),
+      } as T
+    }
+    case 'hosts_import_preview': {
+      const h = hive()
+      const sample = h.hosts[0]
+      return {
+        path: (args.path as string) || 'termbee-hive.xml',
+        totalHosts: sample ? 2 : 0,
+        newHosts: sample
+          ? [
+              {
+                id: 'mock-new-1',
+                protocol: 'ssh',
+                label: 'new-edge-proxy',
+                hostname: 'edge.example.com',
+                port: 22,
+                username: 'ubuntu',
+                authType: 'key',
+                keyPath: '~/.ssh/id_ed25519',
+                group: 'Production',
+                tags: ['edge'],
+                color: 'sky',
+                icon: null,
+                favorite: false,
+                hasPassword: false,
+                hasPassphrase: false,
+              },
+            ]
+          : [],
+        conflicts: sample
+          ? [
+              {
+                incomingId: sample.id,
+                reason: 'sameAddress',
+                incoming: {
+                  id: sample.id,
+                  protocol: sample.protocol,
+                  label: sample.label,
+                  hostname: sample.hostname,
+                  port: sample.port,
+                  username: sample.username,
+                  authType: sample.auth.type,
+                  keyPath: sample.auth.type === 'key' ? sample.auth.keyPath : null,
+                  group: sample.group,
+                  tags: sample.tags,
+                  color: sample.color,
+                  icon: sample.icon,
+                  favorite: sample.favorite,
+                  hasPassword: sample.savedSecrets.password,
+                  hasPassphrase: sample.savedSecrets.passphrase,
+                },
+                existing: {
+                  id: sample.id,
+                  protocol: sample.protocol,
+                  label: sample.label,
+                  hostname: sample.hostname,
+                  port: sample.port,
+                  username: sample.username,
+                  authType: sample.auth.type,
+                  keyPath: sample.auth.type === 'key' ? sample.auth.keyPath : null,
+                  group: sample.group,
+                  tags: sample.tags,
+                  color: sample.color,
+                  icon: sample.icon,
+                  favorite: sample.favorite,
+                  hasPassword: sample.savedSecrets.password,
+                  hasPassphrase: sample.savedSecrets.passphrase,
+                },
+              },
+            ]
+          : [],
+        foldersCount: h.folders.length,
+        knownHostsCount: 0,
+        includesSecrets: true,
+      } as T
+    }
+    case 'hosts_import_apply':
+      return {
+        hive: hive(),
+        added: 1,
+        replaced: 1,
+        skipped: 0,
+      } as T
     case 'known_hosts_list':
       return [] as KnownHost[] as T
     case 'known_hosts_forget':
@@ -242,6 +333,14 @@ export async function mockInvoke<T>(cmd: string, args: Record<string, unknown> =
     }
     case 'ssh_connect':
       return startFakeSession(args) as T
+    case 'ssh_test_connection':
+      await delay(350)
+      return {
+        ok: true,
+        hostKeyStatus: 'trusted',
+        fingerprint: 'SHA256:mock-test-fingerprint',
+        message: 'Connected and authenticated successfully (mock).',
+      } as T
     case 'ssh_write': {
       const emit = sessions.get(args.sessionId as string)
       const data = args.data as string

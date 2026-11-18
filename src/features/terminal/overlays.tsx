@@ -276,11 +276,13 @@ export function ErrorCard({
   onRetry,
   onClose,
   onEdit,
+  onViewOutput,
 }: {
   message: string
   onRetry: () => void
   onClose: () => void
   onEdit?: () => void
+  onViewOutput?: () => void
 }) {
   return (
     <Card tone="rose">
@@ -293,7 +295,7 @@ export function ErrorCard({
           <p className="selectable mt-1 text-sm break-words text-[#b8aa8e]">{message}</p>
         </div>
       </div>
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
         <Button
           variant="ghost"
           className="text-[#b8aa8e] hover:bg-[#2f281c] hover:text-[#f6eedc]"
@@ -301,6 +303,15 @@ export function ErrorCard({
         >
           <X /> Close tab
         </Button>
+        {onViewOutput && (
+          <Button
+            variant="ghost"
+            className="text-[#b8aa8e] hover:bg-[#2f281c] hover:text-[#f6eedc]"
+            onClick={onViewOutput}
+          >
+            View output
+          </Button>
+        )}
         {onEdit && (
           <Button
             variant="outline"
@@ -315,6 +326,47 @@ export function ErrorCard({
         </Button>
       </div>
     </Card>
+  )
+}
+
+/** Slim bar at the bottom of a finished or errored session (scrollback stays readable above). */
+export function ErrorBar({
+  message,
+  onExpand,
+  onRetry,
+  onClose,
+}: {
+  message: string
+  onExpand: () => void
+  onRetry: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-3 border-t border-[#ff7a6b]/25 bg-[#1c1710]/95 px-4 py-2.5 text-sm text-[#f6eedc] backdrop-blur animate-rise">
+      <AlertTriangle className="size-4 shrink-0 text-[#ff7a6b]" />
+      <span className="min-w-0 flex-1 truncate text-xs text-[#f6eedc]">{message}</span>
+      <div className="ml-auto flex shrink-0 gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-[#b8aa8e] hover:bg-[#2f281c] hover:text-[#f6eedc]"
+          onClick={onExpand}
+        >
+          Details
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-[#b8aa8e] hover:bg-[#2f281c] hover:text-[#f6eedc]"
+          onClick={onClose}
+        >
+          Close
+        </Button>
+        <Button size="sm" variant="honey" onClick={onRetry}>
+          <RotateCw /> Try again
+        </Button>
+      </div>
+    </div>
   )
 }
 

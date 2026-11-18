@@ -253,7 +253,7 @@ async fn establish(
 
     let mut handle = client::connect_stream(config, stream, handler)
         .await
-        .map_err(&handshake_error)?;
+        .map_err(handshake_error)?;
 
     let _ = events.send(SessionEvent::Phase {
         phase: Phase::Authenticating,
@@ -292,8 +292,8 @@ async fn establish(
     Ok((handle, channel))
 }
 
-async fn authenticate(
-    handle: &mut client::Handle<Client>,
+async fn authenticate<H: client::Handler>(
+    handle: &mut client::Handle<H>,
     req: &ConnectRequest,
     hosts: &HostStore,
 ) -> Result<(), Stop> {
@@ -422,8 +422,8 @@ fn saved_secret(
 }
 
 /// Password auth, falling back to keyboard-interactive (many servers only offer that).
-async fn password_login(
-    handle: &mut client::Handle<Client>,
+async fn password_login<H: client::Handler>(
+    handle: &mut client::Handle<H>,
     user: &str,
     password: &str,
 ) -> Result<bool, russh::Error> {
@@ -578,5 +578,180 @@ fn friendly_io(e: &std::io::Error, target: &str) -> String {
                 format!("Couldn't connect to {target}: {raw}")
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionResult {
+    pub ok: bool,
+    pub host_key_status: &'static str,
+    pub fingerprint: Option<String>,
+    pub message: String,
+}
+
+struct TestClient {
+    hostname: String,
+    port: u16,
+    known_hosts: Arc<KnownHosts>,
+    key_status: Arc<std::sync::Mutex<(&'static str, Option<String>)>>,
+}
+
+impl client::Handler for TestClient {
+    type Error = russh::Error;
+
+    async fn check_server_key(
+        &mut self,
+        server_key: &PublicKeyOrCertificate,
+    ) -> Result<bool, Self::Error> {
+        let key: PublicKey = match server_key {
+            PublicKeyOrCertificate::PublicKey { key, .. } => key.clone(),
+            PublicKeyOrCertificate::Certificate(cert) => PublicKey::from(cert.public_key().clone()),
+        };
+        let info = describe(&key);
+        match self.known_hosts.check(&self.hostname, self.port, &key) {
+            Verdict::Trusted => {
+                *self.key_status.lock().unwrap() = ("trusted", Some(info.fingerprint));
+                Ok(true)
+            }
+            Verdict::Unknown => {
+                *self.key_status.lock().unwrap() = ("unknown", Some(info.fingerprint));
+                Ok(false)
+            }
+            Verdict::Changed { .. } => {
+                *self.key_status.lock().unwrap() = ("changed", Some(info.fingerprint));
+                Ok(false)
+            }
+        }
+    }
+}
+
+/// Quick TCP + SSH handshake + authentication check for the Host Editor's "Test connection"
+/// button. Never modifies `known_hosts` or `last_connected_at`.
+pub async fn test_connection(
+    req: ConnectRequest,
+    known_hosts: &Arc<KnownHosts>,
+    hosts: &HostStore,
+) -> TestConnectionResult {
+    let target = format!("{}:{}", req.hostname, req.port);
+    let stream = match tokio::time::timeout(
+        Duration::from_secs(10),
+        TcpStream::connect((req.hostname.as_str(), req.port)),
+    )
+    .await
+    {
+        Err(_) => {
+            return TestConnectionResult {
+                ok: false,
+                host_key_status: "unknown",
+                fingerprint: None,
+                message: format!("{target} timed out after 10 seconds."),
+            }
+        }
+        Ok(Err(e)) => {
+            return TestConnectionResult {
+                ok: false,
+                host_key_status: "unknown",
+                fingerprint: None,
+                message: friendly_io(&e, &target),
+            }
+        }
+        Ok(Ok(s)) => s,
+    };
+    let _ = stream.set_nodelay(true);
+
+    let key_status = Arc::new(std::sync::Mutex::new(("unknown", None)));
+    let handler = TestClient {
+        hostname: req.hostname.clone(),
+        port: req.port,
+        known_hosts: known_hosts.clone(),
+        key_status: key_status.clone(),
+    };
+    let config = Arc::new(client::Config {
+        nodelay: true,
+        ..Default::default()
+    });
+    let mut handle = match tokio::time::timeout(
+        Duration::from_secs(10),
+        client::connect_stream(config, stream, handler),
+    )
+    .await
+    {
+        Ok(Ok(handle)) => handle,
+        result => {
+            let (status, fingerprint) = key_status.lock().unwrap().clone();
+            let message = match (status, result) {
+                ("changed", _) => {
+                    "The server's host key has changed. Open a session to inspect it.".into()
+                }
+                ("unknown", _) if fingerprint.is_some() => {
+                    "Server reached. Open a session to verify its host key before testing login."
+                        .into()
+                }
+                (_, Ok(Err(error))) => format!("SSH handshake with {target} failed: {error}"),
+                _ => format!("SSH handshake with {target} timed out after 10 seconds."),
+            };
+            return TestConnectionResult {
+                ok: false,
+                host_key_status: status,
+                fingerprint,
+                message,
+            };
+        }
+    };
+
+    let (status, fp) = key_status.lock().unwrap().clone();
+    let mut check_req = req;
+    check_req.remember = false;
+    let auth_res = match tokio::time::timeout(
+        Duration::from_secs(10),
+        authenticate(&mut handle, &check_req, hosts),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => {
+            return TestConnectionResult {
+                ok: false,
+                host_key_status: status,
+                fingerprint: fp,
+                message: "SSH authentication timed out after 10 seconds.".into(),
+            };
+        }
+    };
+    let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
+
+    match auth_res {
+        Ok(()) => TestConnectionResult {
+            ok: true,
+            host_key_status: status,
+            fingerprint: fp,
+            message: "Connected and authenticated successfully.".into(),
+        },
+        Err(Stop::Report(SessionEvent::SecretRequired { secret, .. })) => TestConnectionResult {
+            ok: false,
+            host_key_status: status,
+            fingerprint: fp,
+            message: format!(
+                "Server is reachable, but a {} is needed to test login.",
+                match secret {
+                    SecretKind::Password => "password",
+                    SecretKind::Passphrase => "key passphrase",
+                }
+            ),
+        },
+        Err(Stop::Report(SessionEvent::AuthFailed { message, .. }))
+        | Err(Stop::Report(SessionEvent::Error { message })) => TestConnectionResult {
+            ok: false,
+            host_key_status: status,
+            fingerprint: fp,
+            message,
+        },
+        Err(_) => TestConnectionResult {
+            ok: false,
+            host_key_status: status,
+            fingerprint: fp,
+            message: "Connection test was cancelled.".into(),
+        },
     }
 }

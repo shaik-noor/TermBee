@@ -75,15 +75,17 @@ TERMBEE_TEST_HOST=127.0.0.1 TERMBEE_TEST_PORT=2222 TERMBEE_TEST_USER=bee TERMBEE
 
 ```bash
 npm run build        # Windows → src-tauri/target/release/bundle/nsis/TermBee_<ver>_x64-setup.exe
-                     # macOS   → …/bundle/dmg/TermBee_<ver>_<arch>.dmg (build on a Mac)
+                     # macOS   → src-tauri/target/release/bundle/macos/TermBee.app (build locally)
 ```
 
-You can't build for macOS from Windows. Installers are built locally, not on GitHub
-Actions (the `checks` workflow only runs when started by hand, so it uses no minutes).
+You can't build for macOS from Windows. On macOS, building locally from source avoids
+Gatekeeper quarantine warnings—copy `src-tauri/target/release/bundle/macos/TermBee.app`
+into **Applications** after the build finishes. Installers are built locally, not on
+GitHub Actions (the `checks` workflow only runs when started by hand, so it uses no minutes).
 
 ## Release
 
-Releases are built on your own machines and uploaded to
+Windows installers are built on Windows and uploaded to
 [GitHub Releases](https://github.com/shaik-noor/TermBee/releases), where users download
 them. You need the [GitHub CLI](https://cli.github.com), logged in once with `gh auth login`.
 
@@ -96,19 +98,16 @@ them. You need the [GitHub CLI](https://cli.github.com), logged in once with `gh
    npm run release
    ```
 
-3. On a Mac, pull the same commit and run the same command. It builds
-   `TermBee_<ver>_universal.dmg` (Apple Silicon + Intel) and adds it to the same release.
+The release script builds for x64 Windows using the Rust MSVC target.
 
 Options: `-- --dry-run` builds without uploading, `-- --draft` creates the release as a
-draft so you can publish it once both installers are attached, and `-- --skip-checks`
-skips typecheck/lint/clippy/tests.
+draft so you can publish it later, and `-- --skip-checks` skips typecheck/lint/clippy/tests.
 
-The builds aren't code-signed yet. Windows SmartScreen asks users to click **More info →
-Run anyway**. The Mac app is ad-hoc signed, so macOS asks users to approve it once in
-**System Settings → Privacy & Security → Open Anyway**. The release notes explain both. To
-remove those prompts later, Windows needs an Authenticode certificate, and macOS needs a
-Developer ID plus notarization. Auto-update needs `tauri-plugin-updater` and a signing key
-pair.
+The Windows build isn't code-signed yet, so SmartScreen asks users to click **More info →
+Run anyway**. Prebuilt macOS `.dmg` installers aren't distributed—macOS users build
+locally from source so Gatekeeper won't block the app. To remove the Windows prompt later,
+Windows needs an Authenticode certificate. Auto-update needs `tauri-plugin-updater` and a
+signing key pair.
 
 Regenerate the app icons after changing the logo with `npm run icons`.
 
