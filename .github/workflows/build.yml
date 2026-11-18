@@ -1,8 +1,7 @@
 name: checks
 
 # Typecheck, lint, clippy and tests. It runs only when started by hand (Actions → checks →
-# Run workflow), so pushes and pull requests use no Actions minutes. Installers are built
-# locally and released with `npm run release` (see README → Release).
+# Run workflow). Version tags use the separate release workflow.
 on:
   workflow_dispatch:
 

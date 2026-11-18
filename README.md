@@ -80,28 +80,25 @@ npm run build        # Windows → src-tauri/target/release/bundle/nsis/TermBee_
 
 You can't build for macOS from Windows. On macOS, building locally from source avoids
 Gatekeeper quarantine warnings—copy `src-tauri/target/release/bundle/macos/TermBee.app`
-into **Applications** after the build finishes. Installers are built locally, not on
-GitHub Actions (the `checks` workflow only runs when started by hand, so it uses no minutes).
+into **Applications** after the build finishes. The Windows release installer is built
+on GitHub Actions when a version tag is pushed.
 
 ## Release
 
-Windows installers are built on Windows and uploaded to
-[GitHub Releases](https://github.com/shaik-noor/TermBee/releases), where users download
-them. You need the [GitHub CLI](https://cli.github.com), logged in once with `gh auth login`.
-
-1. Set the new version in **both** `package.json` and `src-tauri/Cargo.toml`, then commit
-   and push it to `main`.
-2. On Windows, run the release. It checks the code, builds `TermBee_<ver>_x64-setup.exe`,
-   creates the release `v<ver>` with notes, and uploads the installer:
+1. Update the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and
+   `src-tauri/Cargo.lock`, then commit and push to `main`.
+2. Tag that commit and push the tag. For example:
 
    ```bash
-   npm run release
+   git tag v0.2.0
+   git push origin v0.2.0
    ```
 
-The release script builds for x64 Windows using the Rust MSVC target.
+3. The **Release Windows installer** workflow runs checks, builds the Windows x64 NSIS installer,
+   and publishes `TermBee_<ver>_x64-setup.exe` to
+   [GitHub Releases](https://github.com/shaik-noor/TermBee/releases) under `v<ver>`.
 
-Options: `-- --dry-run` builds without uploading, `-- --draft` creates the release as a
-draft so you can publish it later, and `-- --skip-checks` skips typecheck/lint/clippy/tests.
+For a local installer build on Windows, use `npm run release -- --dry-run`.
 
 The Windows build isn't code-signed yet, so SmartScreen asks users to click **More info →
 Run anyway**. Prebuilt macOS `.dmg` installers aren't distributed—macOS users build
