@@ -108,6 +108,42 @@ signing key pair.
 
 Regenerate the app icons after changing the logo with `npm run icons`.
 
+## Microsoft Store packages
+
+Use the **MSIX or PWA** product type in Partner Center. If switching from the
+Win32 listing, save its text and artwork before releasing its name reservation
+and reserving the name for the new product. Open **Product management → Product
+identity** to get the Store-assigned identity.
+
+Once the workflow is on GitHub's default branch, open
+**Actions → Build Microsoft Store package → Run workflow**. Copy
+`Package/Identity/Name`, `Package/Identity/Publisher`, and
+`Package/Properties/PublisherDisplayName` from Partner Center exactly. Start the
+MSIX version at `1.0.0.0` and increase it for each new Store package. The MSIX
+version is independent of the app version. Download **TermBee-Microsoft-Store-x64**
+from the completed run and extract the `.msix` for the **Packages** page in Partner
+Center. Microsoft applies the Store signature after certification.
+
+The MSIX targets Windows 11 on x64, where the Evergreen WebView2 Runtime is
+included with Windows. Test a separately signed copy on a clean Windows 11
+machine before submitting. Check startup, SSH, SFTP, saved credentials after
+restart, and launch of Windows Remote Desktop. Run the Windows App Certification
+Kit with the test copy.
+
+To package locally on Windows with the Windows SDK installed, run the following
+in PowerShell from the repo root. Replace the three example identity values with
+the values from Partner Center.
+
+```powershell
+npm ci
+npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle -- --locked
+$env:PACKAGE_NAME = 'Example.TermBee'
+$env:PUBLISHER = 'CN=example'
+$env:PUBLISHER_DISPLAY_NAME = 'Example Publisher'
+$env:PACKAGE_VERSION = '1.0.0.0'
+node scripts/package-msix.mjs
+```
+
 ## Where things live
 
 | What                               | Where                                      |
