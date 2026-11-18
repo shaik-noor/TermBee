@@ -1,0 +1,58 @@
+name: Build Microsoft Store package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: Package/Identity/Name from Partner Center
+        required: true
+        type: string
+      publisher:
+        description: Package/Identity/Publisher from Partner Center
+        required: true
+        type: string
+      publisher_display_name:
+        description: Package/Properties/PublisherDisplayName from Partner Center
+        required: true
+        type: string
+      package_version:
+        description: Four-part Store package version
+        required: true
+        default: '1.0.0.0'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Build the Windows x64 app
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle -- --locked
+      - name: Package TermBee for the Store
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          PUBLISHER: ${{ inputs.publisher }}
+          PUBLISHER_DISPLAY_NAME: ${{ inputs.publisher_display_name }}
+          PACKAGE_VERSION: ${{ inputs.package_version }}
+        run: node scripts/package-msix.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TermBee-Microsoft-Store-x64
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msix/TermBee_*.msix
+          if-no-files-found: error
